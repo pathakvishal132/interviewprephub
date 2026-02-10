@@ -62,4 +62,8 @@ public class CompanyController {
                 companyService.getCompanyReviews(companyId, page)
         );
     }
+    @GetMapping("/ping")
+    public ResponseEntity<String> ping() {
+        return ResponseEntity.ok("OK");
+    }
 }
