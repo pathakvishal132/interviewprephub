@@ -1,99 +1,111 @@
 package com.interviewprephub.backend.dto;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Set;
+
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 public class CompanyQuestionDTO {
 
-    private Long id;
-    private String question;
-    private String answer;
-    private String level;
-    private String description;
-    private String role;
-    private int minExperience;
-    private int maxExperience;
-    private LocalDateTime dateOfCreation;
-
-
-
-    // -------- constructors --------
-
-    public CompanyQuestionDTO() {}
-
-    // -------- getters & setters --------
 
     public Long getId() {
-        return id;
-    }
+		return id;
+	}
 
-    public void setId(Long id) {
-        this.id = id;
-    }
+	public void setId(Long id) {
+		this.id = id;
+	}
 
-    public String getQuestion() {
-        return question;
-    }
+	public List<CompanyMiniDTO> getCompanies() {
+		return companies;
+	}
 
-    public void setQuestion(String question) {
-        this.question = question;
-    }
+	public void setCompanies(List<CompanyMiniDTO> companies) {
+		this.companies = companies;
+	}
 
-    public String getAnswer() {
-        return answer;
-    }
+	public String getLevel() {
+		return level;
+	}
 
-    public void setAnswer(String answer) {
-        this.answer = answer;
-    }
+	public void setLevel(String level) {
+		this.level = level;
+	}
 
-    public String getLevel() {
-        return level;
-    }
+	public String getQuestion() {
+		return question;
+	}
 
-    public void setLevel(String level) {
-        this.level = level;
-    }
+	public void setQuestion(String question) {
+		this.question = question;
+	}
 
-    public String getDescription() {
-        return description;
-    }
+	public String getAnswer() {
+		return answer;
+	}
 
-    public void setDescription(String description) {
-        this.description = description;
-    }
+	public void setAnswer(String answer) {
+		this.answer = answer;
+	}
 
-    public String getRole() {
-        return role;
-    }
+	public LocalDateTime getDateOfCreation() {
+		return dateOfCreation;
+	}
 
-    public void setRole(String role) {
-        this.role = role;
-    }
+	public void setDateOfCreation(LocalDateTime dateOfCreation) {
+		this.dateOfCreation = dateOfCreation;
+	}
 
-    public int getMinExperience() {
-        return minExperience;
-    }
+	public String getDescription() {
+		return description;
+	}
 
-    public void setMinExperience(int minExperience) {
-        this.minExperience = minExperience;
-    }
+	public void setDescription(String description) {
+		this.description = description;
+	}
 
-    public int getMaxExperience() {
-        return maxExperience;
-    }
+	public String getRole() {
+		return role;
+	}
 
-    public void setMaxExperience(int maxExperience) {
-        this.maxExperience = maxExperience;
-    }
+	public void setRole(String role) {
+		this.role = role;
+	}
 
-    public LocalDateTime getDateOfCreation() {
-        return dateOfCreation;
-    }
+	public int getMinExperience() {
+		return minExperience;
+	}
 
-    public void setDateOfCreation(LocalDateTime dateOfCreation) {
-        this.dateOfCreation = dateOfCreation;
-    }
+	public void setMinExperience(int minExperience) {
+		this.minExperience = minExperience;
+	}
+
+	public int getMaxExperience() {
+		return maxExperience;
+	}
+
+	public void setMaxExperience(int maxExperience) {
+		this.maxExperience = maxExperience;
+	}
+
+	private Long id;
+    private List<CompanyMiniDTO> companies;
+    private String level;
+    private String question;
+    private String answer;
+
+    @JsonProperty("date_of_creation")
+    private LocalDateTime dateOfCreation;
+
+    private String description;
+    private String role;
+
+    @JsonProperty("min_experience")
+    private int minExperience;
+
+    @JsonProperty("max_experience")
+    private int maxExperience;
 
     
 }

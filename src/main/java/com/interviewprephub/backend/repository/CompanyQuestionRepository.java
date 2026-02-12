@@ -1,14 +1,20 @@
 package com.interviewprephub.backend.repository;
 
 import com.interviewprephub.backend.entity.CompanyQuestion;
+
+import java.util.List;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
-public interface CompanyQuestionRepository extends JpaRepository<CompanyQuestion, Long> {
+public interface CompanyQuestionRepository
+extends JpaRepository<CompanyQuestion, Long>,
+        JpaSpecificationExecutor<CompanyQuestion>{
 
 	@EntityGraph(attributePaths = "companies")
 	Page<CompanyQuestion> findByCompanies_Id(Long companyId, Pageable pageable);
@@ -20,10 +26,10 @@ public interface CompanyQuestionRepository extends JpaRepository<CompanyQuestion
            OR LOWER(q.answer) LIKE LOWER(CONCAT('%', :word, '%'))
            OR LOWER(q.description) LIKE LOWER(CONCAT('%', :word, '%'))
     """)
-    Page<CompanyQuestion> searchQuestions(
-            @Param("word") String word,
-            Pageable pageable
-    );
+//    Page<CompanyQuestion> searchQuestions(
+//            @Param("word") String word,
+//            Pageable pageable
+//    );
 
     // ✅ Search with pagination
     Page<CompanyQuestion>
@@ -33,5 +39,11 @@ public interface CompanyQuestionRepository extends JpaRepository<CompanyQuestion
             String description,
             Pageable pageable
     );
+    List<CompanyQuestion> findAllByCompanies_Id(Long companyId);
+    
+    @EntityGraph(attributePaths = "companies")
+    Page<CompanyQuestion> findAll(Specification<CompanyQuestion> spec, Pageable pageable);
+
+
     
 }
