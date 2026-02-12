@@ -58,10 +58,22 @@ public class GeminiParser {
 
         return result;
     }
+    public static String sanitizeMarkdown(String input) {
+
+        return input
+                .replaceAll("(?m)^#{1,6}\\s*", "")   // remove headings ##
+                .replaceAll("\\*\\*(.*?)\\*\\*", "$1") // remove bold **
+                .replaceAll("\\*(.*?)\\*", "$1")       // remove italic *
+                .replaceAll("`", "")                   // remove backticks
+                .replaceAll("\\|", "")                 // remove table pipes
+                .replaceAll("\\n{2,}", "\n\n")         // normalize spacing
+                .trim();
+    }
     public static Map<String, String> parseFeedback(String responseText) {
         Map<String, String> result = new HashMap<>();
         try {
             String cleanJson = sanitize(responseText);
+            System.out.println(cleanJson);
             JsonNode root = objectMapper.readTree(cleanJson);
             JsonNode feedbackNode = root.path("feedback");
             if (!feedbackNode.isMissingNode()) {
@@ -73,8 +85,8 @@ public class GeminiParser {
                 result.put("feedback", "");
             }
             result.put(
-                    "actualAnswer",
-                    root.path("correct_answer").asText("")
+                    "actualAnswer",sanitizeMarkdown(
+                    root.path("actualanswer").asText(""))
             );
         } catch (Exception e) {
             throw new RuntimeException(

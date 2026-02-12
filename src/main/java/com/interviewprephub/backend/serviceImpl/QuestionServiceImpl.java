@@ -81,7 +81,8 @@ public class QuestionServiceImpl implements QuestionService {
         String prompt =
                 "Provide feedback and the correct answer for: \"" + answer + "\" " +
                 "to the question \"" + question + "\". " +
-                "Return valid JSON.";
+                "Return valid JSON: {\"feedback\":\"...\",\"actualanswer\":\"...\"}";
+
 
         String modelResponse = callGemini(prompt);
 
