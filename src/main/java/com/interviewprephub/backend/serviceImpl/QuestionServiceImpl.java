@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestTemplate;
 
 import java.time.LocalDate;
@@ -61,9 +62,7 @@ public class QuestionServiceImpl implements QuestionService {
             String answer,
             String userId
     ) {
-
         LocalDate today = LocalDate.now();
-
         SubmissionTracker tracker =
                 trackerRepository
                         .findByUserIdAndDate(userId, today)
@@ -74,26 +73,28 @@ public class QuestionServiceImpl implements QuestionService {
                             t.setSubmissionCount(0);
                             return t;
                         });
-
         tracker.setSubmissionCount(tracker.getSubmissionCount() + 1);
         trackerRepository.save(tracker);
-
         String prompt =
                 "Provide feedback and the correct answer for: \"" + answer + "\" " +
                 "to the question \"" + question + "\". " +
                 "Return valid JSON: {\"feedback\":\"...\",\"actualanswer\":\"...\"}";
-
-
         String modelResponse = callGemini(prompt);
-
-        Map<String, String> parsed =
-                GeminiParser.parseFeedback(modelResponse);
-
+        modelResponse = modelResponse
+                .replaceAll("```json", "")
+                .replaceAll("```", "")
+                .trim();
+        Map<String, String> parsed = GeminiParser.parseFeedback(modelResponse);
         Map<String, Object> result = new HashMap<>();
-        result.put("feedback", parsed.get("feedback"));
-        result.put("actualAnswer", parsed.get("actualAnswer"));
+        result.put("feedback",
+                StringUtils.hasText(parsed.get("feedback"))
+                        ? parsed.get("feedback")
+                        : "Our free quota has been exhausted. Can't provide feedback now.");
+        result.put("actualAnswer",
+                StringUtils.hasText(parsed.get("actualAnswer"))
+                        ? parsed.get("actualAnswer")
+                        : "Our free quota has been exhausted. Can't provide the correct answer now.");
         result.put("submissionCount", tracker.getSubmissionCount());
-
         return result;
     }
 

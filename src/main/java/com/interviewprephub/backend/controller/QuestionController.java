@@ -6,6 +6,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
 import java.util.Map;
 
 @RestController
@@ -29,13 +30,9 @@ public class QuestionController {
     public ResponseEntity<Map<String, Object>> getFeedback(
             @RequestBody Map<String, String> body
     ) {
-        return ResponseEntity.ok(
-                questionService.generateFeedback(
-                        body.get("question"),
-                        body.get("answer"),
-                        body.get("userId")
-                )
-        );
+        return ResponseEntity.ok(questionService.generateFeedback(body.get("question"),body.get("answer"),body.get("userId")));
+
+
     }
 
     @GetMapping("/submissions")

@@ -61,12 +61,12 @@ public class GeminiParser {
     public static String sanitizeMarkdown(String input) {
 
         return input
-                .replaceAll("(?m)^#{1,6}\\s*", "")   // remove headings ##
-                .replaceAll("\\*\\*(.*?)\\*\\*", "$1") // remove bold **
-                .replaceAll("\\*(.*?)\\*", "$1")       // remove italic *
-                .replaceAll("`", "")                   // remove backticks
-                .replaceAll("\\|", "")                 // remove table pipes
-                .replaceAll("\\n{2,}", "\n\n")         // normalize spacing
+                .replaceAll("(?m)^#{1,6}\\s*", "")   
+                .replaceAll("\\*\\*(.*?)\\*\\*", "$1") 
+                .replaceAll("\\*(.*?)\\*", "$1")       
+                .replaceAll("`", "")                   
+                .replaceAll("\\|", "")                 
+                .replaceAll("\\n{2,}", "\n\n")         
                 .trim();
     }
     public static Map<String, String> parseFeedback(String responseText) {
@@ -85,8 +85,8 @@ public class GeminiParser {
                 result.put("feedback", "");
             }
             result.put(
-                    "actualAnswer",sanitizeMarkdown(
-                    root.path("actualanswer").asText(""))
+                    "actualAnswer",
+                    root.path("actualanswer").asText("")
             );
         } catch (Exception e) {
             throw new RuntimeException(
