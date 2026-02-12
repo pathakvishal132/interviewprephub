@@ -3,6 +3,7 @@ package com.interviewprephub.backend.serviceImpl;
 import com.interviewprephub.backend.dto.CompanyDTO;
 import com.interviewprephub.backend.dto.CompanyMiniDTO;
 import com.interviewprephub.backend.dto.CompanyQuestionDTO;
+import com.interviewprephub.backend.dto.CompanyReviewDTO;
 import com.interviewprephub.backend.entity.Company;
 import com.interviewprephub.backend.entity.CompanyQuestion;
 import com.interviewprephub.backend.entity.CompanyQuestion.Level;
@@ -15,7 +16,6 @@ import com.interviewprephub.backend.repository.CompanyReviewRepository;
 import com.interviewprephub.backend.service.CompanyService;
 
 import jakarta.persistence.criteria.Predicate;
-import jakarta.transaction.Transactional;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.*;
@@ -55,7 +55,6 @@ public class CompanyServiceImpl implements CompanyService {
         else {
         	 companyPage = companyRepository.findAll(pageable);
         }
-       
         List<CompanyDTO> companies = companyPage.getContent().stream().map(CompanyMapper::toDTO)
                 .collect(Collectors.toList());
         Map<String, Object> response = new HashMap<>();
@@ -88,44 +87,6 @@ public class CompanyServiceImpl implements CompanyService {
         response.put("current_page", safePage);
         response.put("total_questions", questionPage.getTotalElements());
         return response;
-    }
-
-    @Override
-    public Map<String, Object> getCompanyReviews(String companyId, int page) {
-        int safePage = Math.max(page, 1);
-        Pageable pageable = PageRequest.of(safePage - 1, REVIEW_PAGE_SIZE);
-        Page<CompanyReview> reviewPage =
-                reviewRepository.findByCompanyId(companyId, pageable);
-        Map<String, Object> response = new HashMap<>();
-        response.put("reviews", reviewPage.getContent());
-        response.put("total_pages", reviewPage.getTotalPages());
-        response.put("current_page", safePage);
-        response.put("total_reviews", reviewPage.getTotalElements());
-        return response;
-    }
-
-    @Override
-    public Object postCompanyReview(Object body) {
-        // TODO: Accept ReviewDTO → map → save → return DTO
-        return body;
-    }
-    @Override
-    public Map<String, Object> createCompanyQuestion(Object request) {
-        return null;
-    }
-    @Override
-    public Map<String, Object> getAllCompanyQuestions(int page) {
-        return null;
-    }
-
-    @Override
-    public Map<String, Object> searchCompanies(String word, int page) {
-        return null;
-    }
-
-    @Override
-    public Map<String, Object> filterCompanyQuestions(Map<String, Object> filters, int page) {
-        return null;
     }
     @Override
     public Map<String, Object> getOtherDetails(Long companyId) {
@@ -223,4 +184,47 @@ public class CompanyServiceImpl implements CompanyService {
         response.put("total_questions", resultPage.getTotalElements());
         return response;
     }
+    
+    public Map<String, Object> getCompanyReviews(String companyId, int page) {
+        if (companyId == null || companyId.isEmpty()) {
+            throw new IllegalArgumentException("Company ID is required.");
+        }
+        int safePage = Math.max(page, 1);
+        Pageable pageable = PageRequest.of(safePage - 1, REVIEW_PAGE_SIZE);
+        Page<CompanyReview> reviewPage =
+                reviewRepository.findByCompanyId(companyId, pageable);
+        List<CompanyReviewDTO> dtoList = reviewPage.getContent()
+                .stream()
+                .map(review -> {
+                    CompanyReviewDTO dto = new CompanyReviewDTO();
+                    dto.setId(review.getId());
+                    dto.setCompanyId(review.getCompanyId());
+                    dto.setCompanyName(review.getCompanyName());
+                    dto.setJobRole(review.getJobRole());
+                    dto.setInterviewLevel(review.getInterviewLevel());
+                    dto.setQuestionsAsked(review.getQuestionsAsked());
+                    dto.setCompanyCulture(review.getCompanyCulture());
+                    dto.setCompanyPayroll(review.getCompanyPayroll());
+                    dto.setCreatedAt(review.getCreatedAt());
+                    return dto;
+                })
+                .toList();
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("reviews", dtoList);
+        response.put("total_pages", reviewPage.getTotalPages());
+        response.put("current_page", safePage);
+        response.put("total_reviews", reviewPage.getTotalElements());
+
+        return response;
+    }
+
+
+
+
+	@Override
+	public Object postCompanyReview(Object body) {
+		// TODO Auto-generated method stub
+		return null;
+	}
 }

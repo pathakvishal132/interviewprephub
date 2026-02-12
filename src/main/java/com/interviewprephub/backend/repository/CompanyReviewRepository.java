@@ -8,5 +8,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface CompanyReviewRepository extends JpaRepository<CompanyReview, Long> {
 
     Page<CompanyReview> findByCompanyId(String companyId, Pageable pageable);
+   
 
 }

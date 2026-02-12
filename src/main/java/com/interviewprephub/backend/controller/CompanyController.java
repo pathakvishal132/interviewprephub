@@ -2,10 +2,13 @@ package com.interviewprephub.backend.controller;
 
 import com.interviewprephub.backend.service.CompanyService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import com.interviewprephub.backend.entity.Company;
 import com.interviewprephub.backend.entity.CompanyQuestion.Level;
+import com.interviewprephub.backend.repository.CompanyReviewRepository;
+import com.interviewprephub.backend.entity.CompanyReview;
 
 import java.util.Map;
 
@@ -15,6 +18,8 @@ public class CompanyController {
 
     @Autowired
     private CompanyService companyService;
+    @Autowired
+    private CompanyReviewRepository reviewRepository;
     
     @GetMapping
     public ResponseEntity<Map<String, Object>> getCompanies(
@@ -44,25 +49,7 @@ public class CompanyController {
                 companyService.getQuestionsByCompany(companyId, page)
         );
     }
-
-//    @GetMapping("/search-question")
-//    public ResponseEntity<Map<String, Object>> searchQuestions(
-//            @RequestParam String word,
-//            @RequestParam(defaultValue = "1") int page
-//    ) {
-//        return ResponseEntity.ok(
-//                companyService.searchQuestions(word, page)
-//        );
-//    }
     
-    @GetMapping("/get-other-details/{companyId}")
-    public ResponseEntity<Map<String , Object>> getOtherDetails(
-    		@PathVariable Long companyId)
-    {
-    	Map<String, Object> result = companyService.getOtherDetails(companyId);
-    	
-    	return ResponseEntity.ok(result);
-    }
     @PostMapping("/filter")
     public ResponseEntity<?> filterQuestions(
             @RequestParam(required = false) String level,
@@ -79,14 +66,47 @@ public class CompanyController {
 
 
     @GetMapping("/reviews")
-    public ResponseEntity<Map<String, Object>> getCompanyReviews(
-            @RequestParam String companyId,
+    public ResponseEntity<?> getCompanyReviews(
+            @RequestParam String company_id,
             @RequestParam(defaultValue = "1") int page
     ) {
-        return ResponseEntity.ok(
-                companyService.getCompanyReviews(companyId, page)
-        );
+        try {
+            Map<String, Object> result =
+            		companyService.getCompanyReviews(company_id, page);
+
+            return ResponseEntity.ok(result);
+
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("detail", e.getMessage()));
+
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("detail", e.getMessage()));
+        }
     }
+    
+    @PostMapping("/reviews")
+    public ResponseEntity<?> postCompanyReview(
+            @RequestBody CompanyReview review
+    ) {
+        try {
+        	System.out.println(review);
+            if (review.getCompanyId() == null || review.getCompanyId().isEmpty()) {
+                return ResponseEntity.badRequest()
+                        .body(Map.of("detail", "Company ID is required."));
+            }
+            CompanyReview savedReview = reviewRepository.save(review);
+            return ResponseEntity
+                    .status(HttpStatus.CREATED)
+                    .body(savedReview);
+
+        } catch (Exception e) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("detail", e.getMessage()));
+        }
+    }
+
     @GetMapping("/ping")
     public ResponseEntity<String> ping() {
         return ResponseEntity.ok("OK");

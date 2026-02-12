@@ -14,8 +14,6 @@ public class Company {
     @Column(nullable = false, length = 255)
     private String name;
 
-    // -------- getters & setters --------
-
     public Long getId() {
         return id;
     }
@@ -31,8 +29,7 @@ public class Company {
     public void setName(String name) {
         this.name = name;
     }
-
-    // -------- toString --------
+    
     @Override
     public String toString() {
         return name;

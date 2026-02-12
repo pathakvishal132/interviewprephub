@@ -30,9 +30,6 @@ public class QuestionServiceImpl implements QuestionService {
     private static final String GEMINI_URL =
     	    "https://generativelanguage.googleapis.com/v1/models/"
     	  + "gemini-2.5-flash:generateContent?key=%s";
-
-
-
     // ---------------- QUESTIONS ----------------
 
     @Override
@@ -52,10 +49,7 @@ public class QuestionServiceImpl implements QuestionService {
     		    "- Do NOT add explanations\n" +
     		    "- Do NOT add extra fields\n" +
     		    "- Output JSON only";
-
-
         String responseText = callGemini(prompt);
-
         return GeminiParser.parseQuestions(responseText);
     }
 
@@ -130,42 +124,22 @@ public class QuestionServiceImpl implements QuestionService {
     // ---------------- GEMINI REST CALL ----------------
 
     private String callGemini(String prompt) {
-
         if (apiKey == null || apiKey.isBlank()) {
             throw new IllegalStateException("Gemini API key is missing");
         }
-
         String url = String.format(GEMINI_URL, apiKey);
-
         Map<String, Object> body = Map.of(
-                "contents", List.of(
-                        Map.of(
-                                "parts", List.of(
-                                        Map.of("text", prompt)
-                                )
-                        )
+                "contents", List.of(Map.of("parts", List.of(Map.of("text", prompt)))
                 )
         );
-
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
-
         HttpEntity<Map<String, Object>> request =
                 new HttpEntity<>(body, headers);
-
         try {
-            ResponseEntity<Map> response =
-                    restTemplate.postForEntity(url, request, Map.class);
-
-            // 🔴 ADD THESE LINES HERE
+            ResponseEntity<Map> response = restTemplate.postForEntity(url, request, Map.class);
             String text = extractText(response.getBody());
-
-            System.out.println("===== RAW GEMINI RESPONSE =====");
-            System.out.println(text);
-            System.out.println("================================");
-
             return text;
-
         } catch (Exception e) {
             throw new RuntimeException("Error calling Gemini REST API", e);
         }
@@ -174,19 +148,14 @@ public class QuestionServiceImpl implements QuestionService {
 
     @SuppressWarnings("unchecked")
     private String extractText(Map<String, Object> response) {
-
         try {
             List<Map<String, Object>> candidates =
                     (List<Map<String, Object>>) response.get("candidates");
-
             Map<String, Object> content =
                     (Map<String, Object>) candidates.get(0).get("content");
-
             List<Map<String, Object>> parts =
                     (List<Map<String, Object>>) content.get("parts");
-
             return parts.get(0).get("text").toString();
-
         } catch (Exception e) {
             throw new RuntimeException("Failed to parse Gemini response", e);
         }
