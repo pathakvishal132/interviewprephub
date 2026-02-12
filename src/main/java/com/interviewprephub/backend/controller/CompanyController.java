@@ -63,6 +63,15 @@ public class CompanyController {
     	Map<String, Object> result = companyService.getFilteredQuestion(level , role , minExperience , maxExperience , description , searchText ,page);
     	return ResponseEntity.ok(result);
     }
+    
+    @GetMapping("/get-other-details/{companyId}")
+    public ResponseEntity<Map<String , Object>> getOtherDetails(
+    		@PathVariable Long companyId)
+    {
+    	Map<String, Object> result = companyService.getOtherDetails(companyId);
+    	
+    	return ResponseEntity.ok(result);
+    }
 
 
     @GetMapping("/reviews")

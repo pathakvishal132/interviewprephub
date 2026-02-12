@@ -15,10 +15,6 @@ public class QuestionController {
     @Autowired
     private QuestionService questionService;
 
-    /**
-     * Generate interview questions
-     * GET /api/questions?domain=Java&subdomain=Streams
-     */
     @GetMapping("/get-question")
     public ResponseEntity<Map<String, String>> getQuestions(
             @RequestParam String domain,
@@ -29,10 +25,6 @@ public class QuestionController {
         );
     }
 
-    /**
-     * Generate feedback
-     * POST /api/questions/feedback
-     */
     @PostMapping("/feedback")
     public ResponseEntity<Map<String, Object>> getFeedback(
             @RequestBody Map<String, String> body
@@ -46,10 +38,6 @@ public class QuestionController {
         );
     }
 
-    /**
-     * Get user submission history
-     * GET /api/questions/submissions?userId=123
-     */
     @GetMapping("/submissions")
     public ResponseEntity<Map<String, Object>> getUserSubmissions(
             @RequestParam String userId
