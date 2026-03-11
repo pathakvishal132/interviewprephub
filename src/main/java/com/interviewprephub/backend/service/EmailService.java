@@ -26,6 +26,7 @@ public class EmailService {
     	}
 
     	logger.info("Frontend URL used for email: {}", frontendUrl);
+    	frontendUrl = "https://interview-prep-hub-frontend-gamma.vercel.app";
         String verificationUrl = frontendUrl + "/verify-email?token=" + token;
         
         SimpleMailMessage message = new SimpleMailMessage();
