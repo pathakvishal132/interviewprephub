@@ -5,7 +5,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
-
+import org.springframework.util.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 @Service
 public class EmailService {
 
@@ -14,10 +16,18 @@ public class EmailService {
 
     @Value("${app.frontend.url}")
     private String frontendUrl;
+    private static final Logger logger = LoggerFactory.getLogger(EmailService.class);
 
     public void sendVerificationEmail(String to, String token) {
-        String verificationUrl = frontendUrl + "/verify-email?token=" + token;
+    	logger.info("Frontend URL from config: {}", frontendUrl);
 
+    	if (!StringUtils.hasText(frontendUrl)) {
+    	    frontendUrl = "https://interview-prep-hub-frontend-gamma.vercel.app";
+    	}
+
+    	logger.info("Frontend URL used for email: {}", frontendUrl);
+        String verificationUrl = frontendUrl + "/verify-email?token=" + token;
+        
         SimpleMailMessage message = new SimpleMailMessage();
         message.setTo(to);
         message.setSubject("Verify your email - InterviewPrepHub");
