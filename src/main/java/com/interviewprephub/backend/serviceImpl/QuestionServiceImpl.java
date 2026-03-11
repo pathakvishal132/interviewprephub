@@ -1,7 +1,9 @@
 package com.interviewprephub.backend.serviceImpl;
 
 import com.interviewprephub.backend.entity.SubmissionTracker;
+import com.interviewprephub.backend.entity.TopicProgress;
 import com.interviewprephub.backend.repository.SubmissionTrackerRepository;
+import com.interviewprephub.backend.repository.TopicProgressRepository;
 import com.interviewprephub.backend.service.QuestionService;
 import com.interviewprephub.backend.util.GeminiParser;
 
@@ -13,6 +15,7 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestTemplate;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -23,10 +26,15 @@ public class QuestionServiceImpl implements QuestionService {
     @Autowired
     private SubmissionTrackerRepository trackerRepository;
 
+    @Autowired
+    private TopicProgressRepository topicProgressRepository;
+
     @Value("${api.key}")
     private String apiKey;
 
     private final RestTemplate restTemplate = new RestTemplate();
+    
+    private static final int FREE_QUESTION_LIMIT = 2;
 
     private static final String GEMINI_URL =
     	    "https://generativelanguage.googleapis.com/v1/models/"
@@ -34,11 +42,14 @@ public class QuestionServiceImpl implements QuestionService {
     // ---------------- QUESTIONS ----------------
 
     @Override
-    public Map<String, String> generateQuestions(String domain, String subdomain) {
+    public Map<String, Object> generateQuestions(String domain, String subdomain, String userId) {
+    	boolean isAuthenticated = userId != null && !userId.isBlank();
+    	
+    	int limit = 10;
 
     	String prompt =
     		    "You are a senior " + domain + " interview expert.\n" +
-    		    "Generate exactly 10 interview questions for '" + subdomain + "'.\n\n" +
+    		    "Generate exactly " + limit + " interview questions for '" + subdomain + "'.\n\n" +
     		    "Return ONLY valid JSON in the following format:\n" +
     		    "{\n" +
     		    "  \"questions\": [\n" +
@@ -51,17 +62,35 @@ public class QuestionServiceImpl implements QuestionService {
     		    "- Do NOT add extra fields\n" +
     		    "- Output JSON only";
         String responseText = callGemini(prompt);
-        return GeminiParser.parseQuestions(responseText);
+        Map<String, String> questionsMap = GeminiParser.parseQuestions(responseText);
+        
+        // Convert Map<String, String> to List<Map<String, String>>
+        List<Map<String, String>> questionsList = new ArrayList<>();
+        for (int i = 1; i <= limit; i++) {
+            String key = "q" + i;
+            if (questionsMap.containsKey(key)) {
+                Map<String, String> q = new HashMap<>();
+                q.put("question", questionsMap.get(key));
+                questionsList.add(q);
+            }
+        }
+        
+        
+        Map<String, Object> response = new HashMap<>();
+        response.put("questions", questionsList);
+        response.put("requiresAuth", !isAuthenticated);
+        
+        if (!isAuthenticated) {
+            response.put("message", "Sign in to access more features and track your progress!");
+        }
+        
+        return response;
     }
 
     // ---------------- FEEDBACK ----------------
 
     @Override
-    public Map<String, Object> generateFeedback(
-            String question,
-            String answer,
-            String userId
-    ) {
+    public Map<String, Object> generateFeedback(String question, String answer, String userId, String domain, String subdomain) {
         LocalDate today = LocalDate.now();
         SubmissionTracker tracker =
                 trackerRepository
@@ -75,6 +104,27 @@ public class QuestionServiceImpl implements QuestionService {
                         });
         tracker.setSubmissionCount(tracker.getSubmissionCount() + 1);
         trackerRepository.save(tracker);
+        
+        // Track topic progress
+        if (domain != null && subdomain != null) {
+            TopicProgress topicProgress = topicProgressRepository
+                    .findByUserIdAndDomainAndSubdomain(userId, domain, subdomain)
+                    .orElseGet(() -> {
+                        TopicProgress tp = new TopicProgress();
+                        tp.setUserId(userId);
+                        tp.setDomain(domain);
+                        tp.setSubdomain(subdomain);
+                        tp.setQuestionsAttempted(0);
+                        tp.setQuestionsSolved(0);
+                        tp.setTotalSubmissions(0);
+                        return tp;
+                    });
+            topicProgress.setQuestionsAttempted(topicProgress.getQuestionsAttempted() + 1);
+            topicProgress.setTotalSubmissions(topicProgress.getTotalSubmissions() + 1);
+            topicProgress.setLastAttemptDate(today);
+            topicProgressRepository.save(topicProgress);
+        }
+        
         String prompt =
                 "Provide feedback and the correct answer for: \"" + answer + "\" " +
                 "to the question \"" + question + "\". " +
@@ -95,6 +145,54 @@ public class QuestionServiceImpl implements QuestionService {
                         ? parsed.get("actualAnswer")
                         : "Our free quota has been exhausted. Can't provide the correct answer now.");
         result.put("submissionCount", tracker.getSubmissionCount());
+        return result;
+    }
+
+    // ---------------- TOPIC PROGRESS ----------------
+
+    @Override
+    public Map<String, Object> getUserTopicProgress(String userId) {
+        List<TopicProgress> topics = topicProgressRepository.findByUserIdOrderByLastAttemptDateDesc(userId);
+        
+        Map<String, Object> result = new HashMap<>();
+        
+        // Group by domain
+        Map<String, List<TopicProgress>> byDomain = new HashMap<>();
+        for (TopicProgress tp : topics) {
+            byDomain.computeIfAbsent(tp.getDomain(), k -> new ArrayList<>()).add(tp);
+        }
+        
+        List<Map<String, Object>> domainList = new ArrayList<>();
+        for (Map.Entry<String, List<TopicProgress>> entry : byDomain.entrySet()) {
+            Map<String, Object> domainMap = new HashMap<>();
+            domainMap.put("domain", entry.getKey());
+            
+            int totalAttempts = 0;
+            int totalSubmissions = 0;
+            List<Map<String, Object>> subdomains = new ArrayList<>();
+            
+            for (TopicProgress tp : entry.getValue()) {
+                Map<String, Object> subdomainMap = new HashMap<>();
+                subdomainMap.put("subdomain", tp.getSubdomain());
+                subdomainMap.put("questionsAttempted", tp.getQuestionsAttempted());
+                subdomainMap.put("totalSubmissions", tp.getTotalSubmissions());
+                subdomainMap.put("lastAttempt", tp.getLastAttemptDate() != null ? tp.getLastAttemptDate().toString() : null);
+                subdomains.add(subdomainMap);
+                
+                totalAttempts += tp.getQuestionsAttempted();
+                totalSubmissions += tp.getTotalSubmissions();
+            }
+            
+            domainMap.put("totalAttempts", totalAttempts);
+            domainMap.put("totalSubmissions", totalSubmissions);
+            domainMap.put("topics", subdomains);
+            domainList.add(domainMap);
+        }
+        
+        result.put("domains", domainList);
+        result.put("totalTopics", topics.size());
+        result.put("totalSubmissions", topics.stream().mapToInt(TopicProgress::getTotalSubmissions).sum());
+        
         return result;
     }
 
@@ -162,4 +260,5 @@ public class QuestionServiceImpl implements QuestionService {
             throw new RuntimeException("Failed to parse Gemini response", e);
         }
     }
+
 }
