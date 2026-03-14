@@ -1,10 +1,11 @@
 package com.interviewprephub.backend.service;
 
+import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
-import org.springframework.scheduling.annotation.Async;
+import org.springframework.mail.javamail.JavaMailSenderImpl;
 import org.springframework.stereotype.Service;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -13,6 +14,8 @@ import org.slf4j.LoggerFactory;
 public class EmailService {
 
     private static final Logger logger = LoggerFactory.getLogger(EmailService.class);
+    private static final int MAX_RETRIES = 3;
+    private static final long RETRY_DELAY_MS = 2000;
 
     @Autowired
     private JavaMailSender mailSender;
@@ -23,10 +26,34 @@ public class EmailService {
     @Value("${spring.mail.username}")
     private String mailUsername;
 
-    @Async
+    @Value("${spring.mail.host}")
+    private String mailHost;
+
+    @Value("${spring.mail.port}")
+    private String mailPort;
+
+    @PostConstruct
+    public void init() {
+        logger.info("========== EMAIL SERVICE CONFIGURATION ==========");
+        logger.info("MAIL_HOST     : {}", mailHost);
+        logger.info("MAIL_PORT     : {}", mailPort);
+        logger.info("MAIL_USERNAME : {}",
+                mailUsername != null ? mailUsername.substring(0, Math.min(4, mailUsername.length())) + "****" : "NULL");
+        logger.info("FRONTEND_URL  : {}", frontendUrl);
+        logger.info("JavaMailSender class: {}", mailSender.getClass().getName());
+
+        if (mailSender instanceof JavaMailSenderImpl impl) {
+            var props = impl.getJavaMailProperties();
+            logger.info("smtp.auth         : {}", props.getProperty("mail.smtp.auth"));
+            logger.info("smtp.starttls     : {}", props.getProperty("mail.smtp.starttls.enable"));
+            logger.info("smtp.ssl.trust    : {}", props.getProperty("mail.smtp.ssl.trust"));
+            logger.info("smtp.ssl.protocols: {}", props.getProperty("mail.smtp.ssl.protocols"));
+        }
+        logger.info("==================================================");
+    }
+
     public void sendVerificationEmail(String to, String token) {
-        String verificationUrl = "https://interview-prep-hub-frontend-gamma.vercel.app" + "/verify-email?token="
-                + token;
+        String verificationUrl = frontendUrl + "/verify-email?token=" + token;
         SimpleMailMessage message = new SimpleMailMessage();
         message.setFrom(mailUsername);
         message.setTo(to);
@@ -39,15 +66,9 @@ public class EmailService {
                         "Best regards,\n" +
                         "InterviewPrepHub Team");
 
-        try {
-            mailSender.send(message);
-            logger.info("Verification email sent successfully to: {}", to);
-        } catch (Exception e) {
-            logger.error("Failed to send verification email to {}: {}", to, e.getMessage(), e);
-        }
+        sendWithRetry(message, to, "verification");
     }
 
-    @Async
     public void sendWelcomeEmail(String to, String fullName) {
         SimpleMailMessage message = new SimpleMailMessage();
         message.setFrom(mailUsername);
@@ -60,11 +81,39 @@ public class EmailService {
                         "Best regards,\n" +
                         "InterviewPrepHub Team");
 
-        try {
-            mailSender.send(message);
-            logger.info("Welcome email sent successfully to: {}", to);
-        } catch (Exception e) {
-            logger.error("Failed to send welcome email to {}: {}", to, e.getMessage(), e);
+        sendWithRetry(message, to, "welcome");
+    }
+
+    private void sendWithRetry(SimpleMailMessage message, String to, String emailType) {
+        for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+            try {
+                logger.info("Attempt {}/{} - Sending {} email to {} via {}:{}",
+                        attempt, MAX_RETRIES, emailType, to, mailHost, mailPort);
+                mailSender.send(message);
+                logger.info("SUCCESS - {} email sent to {} on attempt {}", emailType, to, attempt);
+                return;
+            } catch (Exception e) {
+                logger.error("FAILED attempt {}/{} - {} email to {}: {} - {}",
+                        attempt, MAX_RETRIES, emailType, to,
+                        e.getClass().getSimpleName(), e.getMessage());
+
+                if (e.getCause() != null) {
+                    logger.error("Root cause: {} - {}", e.getCause().getClass().getSimpleName(),
+                            e.getCause().getMessage());
+                }
+
+                if (attempt < MAX_RETRIES) {
+                    try {
+                        Thread.sleep(RETRY_DELAY_MS);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                } else {
+                    logger.error("ALL {} RETRIES EXHAUSTED for {} email to {}. Email NOT sent.", MAX_RETRIES, emailType,
+                            to);
+                }
+            }
         }
     }
 }
