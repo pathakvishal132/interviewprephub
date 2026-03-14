@@ -25,10 +25,10 @@ public class EmailService {
     @Value("${FRONTEND_URL}")
     private String frontendUrl;
 
-    @Value("${RESEND_API_KEY}")
+    @Value("${resend.api-key}")
     private String resendApiKey;
 
-    @Value("${MAIL_FROM:onboarding@resend.dev}")
+    @Value("${mail.from}")
     private String mailFrom;
 
     public EmailService() {
