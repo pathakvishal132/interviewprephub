@@ -25,7 +25,8 @@ public class EmailService {
 
     @Async
     public void sendVerificationEmail(String to, String token) {
-        String verificationUrl = frontendUrl + "/verify-email?token=" + token;
+        String verificationUrl = "https://interview-prep-hub-frontend-gamma.vercel.app" + "/verify-email?token="
+                + token;
         SimpleMailMessage message = new SimpleMailMessage();
         message.setFrom(mailUsername);
         message.setTo(to);
