@@ -35,7 +35,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String path = request.getServletPath();
         return path.startsWith("/api/auth/") || path.startsWith("/api/company/") 
             || path.startsWith("/api/questions/") || path.startsWith("/api/question/")
-            || path.startsWith("/api/upload-image/") || path.startsWith("/api/get-image/");
+            || path.startsWith("/api/emails/") || path.startsWith("/api/upload-image/") || path.startsWith("/api/get-image/");
     }
 
     @Override

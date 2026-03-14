@@ -4,32 +4,30 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
-import org.springframework.util.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 @Service
 public class EmailService {
+
+    private static final Logger logger = LoggerFactory.getLogger(EmailService.class);
 
     @Autowired
     private JavaMailSender mailSender;
 
-    @Value("${app.frontend.url}")
+    @Value("${FRONTEND_URL}")
     private String frontendUrl;
-    private static final Logger logger = LoggerFactory.getLogger(EmailService.class);
 
+    @Value("${spring.mail.username}")
+    private String mailUsername;
+
+    @Async
     public void sendVerificationEmail(String to, String token) {
-    	logger.info("Frontend URL from config: {}", frontendUrl);
-
-    	if (!StringUtils.hasText(frontendUrl)) {
-    	    frontendUrl = "https://interview-prep-hub-frontend-gamma.vercel.app";
-    	}
-
-    	logger.info("Frontend URL used for email: {}", frontendUrl);
-    	frontendUrl = "https://interview-prep-hub-frontend-gamma.vercel.app";
         String verificationUrl = frontendUrl + "/verify-email?token=" + token;
-        
         SimpleMailMessage message = new SimpleMailMessage();
+        message.setFrom(mailUsername);
         message.setTo(to);
         message.setSubject("Verify your email - InterviewPrepHub");
         message.setText(
@@ -42,13 +40,16 @@ public class EmailService {
 
         try {
             mailSender.send(message);
+            logger.info("Verification email sent successfully to: {}", to);
         } catch (Exception e) {
-            System.err.println("Failed to send email: " + e.getMessage());
+            logger.error("Failed to send verification email to {}: {}", to, e.getMessage(), e);
         }
     }
 
+    @Async
     public void sendWelcomeEmail(String to, String fullName) {
         SimpleMailMessage message = new SimpleMailMessage();
+        message.setFrom(mailUsername);
         message.setTo(to);
         message.setSubject("Welcome to InterviewPrepHub!");
         message.setText(
@@ -60,8 +61,9 @@ public class EmailService {
 
         try {
             mailSender.send(message);
+            logger.info("Welcome email sent successfully to: {}", to);
         } catch (Exception e) {
-            System.err.println("Failed to send email: " + e.getMessage());
+            logger.error("Failed to send welcome email to {}: {}", to, e.getMessage(), e);
         }
     }
 }

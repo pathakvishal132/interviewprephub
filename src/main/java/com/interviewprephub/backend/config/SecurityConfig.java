@@ -46,6 +46,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/company/**").permitAll()
                         .requestMatchers("/api/questions/**").permitAll()
                         .requestMatchers("/api/question/**").permitAll()
+                        .requestMatchers("/api/emails/**").permitAll()
                         .requestMatchers("/api/upload-image/**").permitAll()
                         .requestMatchers("/api/get-image/**").permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
