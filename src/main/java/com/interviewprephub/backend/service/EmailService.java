@@ -16,7 +16,7 @@ import java.time.Duration;
 public class EmailService {
 
     private static final Logger logger = LoggerFactory.getLogger(EmailService.class);
-    private static final String RESEND_API_URL = "https://api.resend.com/emails";
+    private static final String BREVO_API_URL = "https://api.brevo.com/v3/smtp/email";
     private static final int MAX_RETRIES = 3;
     private static final long RETRY_DELAY_MS = 2000;
 
@@ -25,11 +25,14 @@ public class EmailService {
     @Value("${FRONTEND_URL}")
     private String frontendUrl;
 
-    @Value("${resend.api-key}")
-    private String resendApiKey;
+    @Value("${brevo.api-key}")
+    private String brevoApiKey;
 
     @Value("${mail.from}")
     private String mailFrom;
+
+    @Value("${mail.from-name:InterviewPrepHub}")
+    private String mailFromName;
 
     public EmailService() {
         this.httpClient = HttpClient.newBuilder()
@@ -40,11 +43,12 @@ public class EmailService {
     @PostConstruct
     public void init() {
         logger.info("========== EMAIL SERVICE CONFIGURATION ==========");
-        logger.info("Provider      : Resend (HTTP API)");
-        logger.info("API URL       : {}", RESEND_API_URL);
-        logger.info("API Key       : {}", resendApiKey != null && resendApiKey.length() > 8
-                ? resendApiKey.substring(0, 8) + "****" : "NOT SET");
+        logger.info("Provider      : Brevo (HTTP API)");
+        logger.info("API URL       : {}", BREVO_API_URL);
+        logger.info("API Key       : {}", brevoApiKey != null && brevoApiKey.length() > 10
+                ? brevoApiKey.substring(0, 10) + "****" : "NOT SET");
         logger.info("MAIL_FROM     : {}", mailFrom);
+        logger.info("MAIL_FROM_NAME: {}", mailFromName);
         logger.info("FRONTEND_URL  : {}", frontendUrl);
         logger.info("==================================================");
     }
@@ -78,13 +82,14 @@ public class EmailService {
 
         for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
             try {
-                logger.info("Attempt {}/{} - Sending {} email to {} via Resend API",
+                logger.info("Attempt {}/{} - Sending {} email to {} via Brevo API",
                         attempt, MAX_RETRIES, emailType, to);
 
                 HttpRequest request = HttpRequest.newBuilder()
-                        .uri(URI.create(RESEND_API_URL))
-                        .header("Authorization", "Bearer " + resendApiKey)
+                        .uri(URI.create(BREVO_API_URL))
+                        .header("api-key", brevoApiKey)
                         .header("Content-Type", "application/json")
+                        .header("Accept", "application/json")
                         .POST(HttpRequest.BodyPublishers.ofString(jsonPayload))
                         .timeout(Duration.ofSeconds(15))
                         .build();
@@ -128,10 +133,10 @@ public class EmailService {
 
     private String buildJsonPayload(String to, String subject, String textBody) {
         return "{" +
-                "\"from\":\"InterviewPrepHub <" + escapeJson(mailFrom) + ">\"," +
-                "\"to\":[\"" + escapeJson(to) + "\"]," +
+                "\"sender\":{\"name\":\"" + escapeJson(mailFromName) + "\",\"email\":\"" + escapeJson(mailFrom) + "\"}," +
+                "\"to\":[{\"email\":\"" + escapeJson(to) + "\"}]," +
                 "\"subject\":\"" + escapeJson(subject) + "\"," +
-                "\"text\":\"" + escapeJson(textBody) + "\"" +
+                "\"textContent\":\"" + escapeJson(textBody) + "\"" +
                 "}";
     }
 
