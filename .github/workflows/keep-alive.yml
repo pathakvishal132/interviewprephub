@@ -1,8 +1,8 @@
-name: Keep Backend Alive
+name: Keep Render Alive
 
 on:
   schedule:
-    - cron: "*/10 * * * *"   # every 10 minutes
+    - cron: "0 * * * *"   # every hour
   workflow_dispatch:
 
 jobs:
@@ -11,5 +11,5 @@ jobs:
     steps:
       - name: Ping backend
         run: |
-          curl -s https://interviewprephub.onrender.com/actuator/health
+          curl -f https://interviewprephub.onrender.com/api/company/ping || echo "Ping failed"
 
