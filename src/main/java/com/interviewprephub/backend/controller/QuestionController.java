@@ -61,12 +61,6 @@ public class QuestionController {
                 String domain = body.get("domain");
                 String subdomain = body.get("subdomain");
 
-                if (userId == null || userId.isBlank()) {
-                        Map<String, Object> response = new HashMap<>();
-                        response.put("requiresAuth", true);
-                        response.put("message", "Sign in to get personalized feedback and track your progress!");
-                        return ResponseEntity.ok(response);
-                }
                 return ResponseEntity.ok(questionService.generateFeedback(
                                 body.get("question"), body.get("answer"), userId, domain, subdomain));
 
