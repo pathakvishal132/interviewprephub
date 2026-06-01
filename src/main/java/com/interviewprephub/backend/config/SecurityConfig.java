@@ -44,8 +44,10 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/signup").permitAll()
                         .requestMatchers("/api/company/**").permitAll()
-                        .requestMatchers("/api/questions/**").permitAll()
-                        .requestMatchers("/api/question/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/questions/get-question").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/questions/feedback").authenticated()
+                        .requestMatchers(HttpMethod.GET, "/api/questions/submissions").authenticated()
+                        .requestMatchers(HttpMethod.GET, "/api/questions/topics").authenticated()
                         .requestMatchers("/api/emails/**").permitAll()
                         .requestMatchers("/api/upload-image/**").permitAll()
                         .requestMatchers("/api/get-image/**").permitAll()
@@ -71,7 +73,10 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOriginPatterns(Arrays.asList("*"));
+        configuration.setAllowedOriginPatterns(Arrays.asList(
+                "http://localhost:4200",
+                "https://interview-prep-hub-frontend-gamma.vercel.app"
+        ));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(Arrays.asList("*"));
         configuration.setAllowCredentials(true);

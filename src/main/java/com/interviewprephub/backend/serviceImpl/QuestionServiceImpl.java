@@ -1,11 +1,16 @@
 package com.interviewprephub.backend.serviceImpl;
 
+import com.interviewprephub.backend.config.RateLimiter;
+import com.interviewprephub.backend.entity.AiRequestLog;
 import com.interviewprephub.backend.entity.SubmissionTracker;
 import com.interviewprephub.backend.entity.TopicProgress;
+import com.interviewprephub.backend.repository.AiRequestLogRepository;
 import com.interviewprephub.backend.repository.SubmissionTrackerRepository;
 import com.interviewprephub.backend.repository.TopicProgressRepository;
 import com.interviewprephub.backend.service.QuestionService;
 import com.interviewprephub.backend.util.GeminiParser;
+
+import jakarta.servlet.http.HttpServletRequest;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -13,12 +18,17 @@ import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
 
 @Service
 public class QuestionServiceImpl implements QuestionService {
@@ -29,6 +39,9 @@ public class QuestionServiceImpl implements QuestionService {
     @Autowired
     private TopicProgressRepository topicProgressRepository;
 
+    @Autowired
+    private AiRequestLogRepository aiRequestLogRepository;
+
     @Value("${api.key}")
     private String apiKey;
 
@@ -38,6 +51,9 @@ public class QuestionServiceImpl implements QuestionService {
 
     private static final String GEMINI_URL = "https://generativelanguage.googleapis.com/v1/models/"
             + "gemini-2.5-flash:generateContent?key=%s";
+
+    private static final RateLimiter rateLimiter = new RateLimiter(10, 1, TimeUnit.MINUTES);
+
     // ---------------- QUESTIONS ----------------
 
     @Override
@@ -60,7 +76,7 @@ public class QuestionServiceImpl implements QuestionService {
                 "- Do NOT add explanations\n" +
                 "- Do NOT add extra fields\n" +
                 "- Output JSON only";
-        String responseText = callGemini(prompt);
+        String responseText = callGemini(prompt, "generateQuestions", userId);
         Map<String, String> questionsMap = GeminiParser.parseQuestions(responseText);
 
         // Convert Map<String, String> to List<Map<String, String>>
@@ -126,7 +142,7 @@ public class QuestionServiceImpl implements QuestionService {
         String prompt = "Provide feedback and the correct answer for: \"" + answer + "\" " +
                 "to the question \"" + question + "\". " +
                 "Return valid JSON: {\"feedback\":\"...\",\"actualanswer\":\"...\"}";
-        String modelResponse = callGemini(prompt);
+        String modelResponse = callGemini(prompt, "generateFeedback", userId);
         modelResponse = modelResponse
                 .replaceAll("```json", "")
                 .replaceAll("```", "")
@@ -218,32 +234,108 @@ public class QuestionServiceImpl implements QuestionService {
 
     // ---------------- GEMINI REST CALL ----------------
 
-    private String callGemini(String prompt) {
+    private static final Pattern[] ABUSE_PATTERNS = {
+            Pattern.compile("ignore all previous instructions", Pattern.CASE_INSENSITIVE),
+            Pattern.compile("forget (your|all) (previous )?(instructions|prompt|rules)", Pattern.CASE_INSENSITIVE),
+            Pattern.compile("you are now", Pattern.CASE_INSENSITIVE),
+            Pattern.compile("act as (if you are|a) ", Pattern.CASE_INSENSITIVE),
+            Pattern.compile("bypass|jailbreak|exploit|hack", Pattern.CASE_INSENSITIVE),
+            Pattern.compile("<[^>]+>.*?</[^>]+>", Pattern.DOTALL),
+    };
+
+    private static final List<Map<String, Object>> SAFETY_SETTINGS = List.of(
+            Map.of("category", "HARM_CATEGORY_HARASSMENT", "threshold", "BLOCK_MEDIUM_AND_ABOVE"),
+            Map.of("category", "HARM_CATEGORY_HATE_SPEECH", "threshold", "BLOCK_MEDIUM_AND_ABOVE"),
+            Map.of("category", "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold", "BLOCK_MEDIUM_AND_ABOVE"),
+            Map.of("category", "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold", "BLOCK_MEDIUM_AND_ABOVE"));
+
+    private void validatePrompt(String prompt) {
+        if (prompt == null || prompt.isBlank()) {
+            throw new IllegalArgumentException("Prompt cannot be empty");
+        }
+        if (prompt.length() > 10000) {
+            throw new IllegalArgumentException("Prompt exceeds maximum length");
+        }
+        for (Pattern p : ABUSE_PATTERNS) {
+            if (p.matcher(prompt).find()) {
+                throw new IllegalArgumentException("Prompt contains prohibited content");
+            }
+        }
+    }
+
+    private String callGemini(String prompt, String type, String userId) {
         if (apiKey == null || apiKey.isBlank()) {
             throw new IllegalStateException("Gemini API key is missing");
         }
+
+        validatePrompt(prompt);
+
+        String clientIp = resolveClientIp();
+        if (!rateLimiter.isAllowed(clientIp)) {
+            throw new RuntimeException("Rate limit exceeded. Try again later.");
+        }
+
         String url = String.format(GEMINI_URL, apiKey);
-        Map<String, Object> body = Map.of(
-                "contents", List.of(Map.of("parts", List.of(Map.of("text", prompt)))));
+        Map<String, Object> body = new HashMap<>();
+        body.put("contents", List.of(Map.of("parts", List.of(Map.of("text", prompt)))));
+        body.put("safetySettings", SAFETY_SETTINGS);
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         HttpEntity<Map<String, Object>> request = new HttpEntity<>(body, headers);
         try {
             ResponseEntity<Map> response = restTemplate.postForEntity(url, request, Map.class);
             String text = extractText(response.getBody());
+            logAiRequest(type, userId, prompt, text, "SUCCESS", null);
             return text;
         } catch (Exception e) {
+            String errorMsg = e.getMessage();
+            logAiRequest(type, userId, prompt, null, "FAILURE", errorMsg);
             throw new RuntimeException("Error calling Gemini REST API", e);
         }
+    }
+
+    private void logAiRequest(String type, String userId, String prompt, String response, String status, String errorMessage) {
+        try {
+            AiRequestLog log = new AiRequestLog();
+            log.setType(type);
+            log.setUserId(userId);
+            log.setPrompt(prompt);
+            log.setResponse(response);
+            log.setStatus(status);
+            log.setErrorMessage(errorMessage);
+            aiRequestLogRepository.save(log);
+        } catch (Exception e) {
+            // Don't let logging failure break the main flow
+        }
+    }
+
+    private String resolveClientIp() {
+        ServletRequestAttributes attrs = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+        if (attrs != null) {
+            HttpServletRequest req = attrs.getRequest();
+            String xfwd = req.getHeader("X-Forwarded-For");
+            if (xfwd != null && !xfwd.isBlank()) {
+                return xfwd.split(",")[0].trim();
+            }
+            return req.getRemoteAddr();
+        }
+        return "unknown";
     }
 
     @SuppressWarnings("unchecked")
     private String extractText(Map<String, Object> response) {
         try {
             List<Map<String, Object>> candidates = (List<Map<String, Object>>) response.get("candidates");
+            if (candidates == null || candidates.isEmpty()) {
+                Map<String, Object> feedback = (Map<String, Object>) response.get("promptFeedback");
+                String reason = feedback != null ? (String) feedback.get("blockReason") : "unknown";
+                throw new RuntimeException("Request blocked by safety filters: " + reason);
+            }
             Map<String, Object> content = (Map<String, Object>) candidates.get(0).get("content");
             List<Map<String, Object>> parts = (List<Map<String, Object>>) content.get("parts");
             return parts.get(0).get("text").toString();
+        } catch (RuntimeException e) {
+            throw e;
         } catch (Exception e) {
             throw new RuntimeException("Failed to parse Gemini response", e);
         }
