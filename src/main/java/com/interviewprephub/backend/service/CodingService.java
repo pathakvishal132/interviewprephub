@@ -15,6 +15,8 @@ public interface CodingService {
 
     Map<String, Object> createCodingQuestion(CreateCodingQuestionRequest request);
 
+    Map<String, Object> updateCodingQuestion(Long questionId, CreateCodingQuestionRequest request);
+
     Map<String, Object> getSubmissionStats(Long userId, int days);
 
     void deleteCodingQuestion(Long questionId);

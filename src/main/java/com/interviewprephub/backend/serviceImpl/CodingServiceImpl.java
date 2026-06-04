@@ -12,6 +12,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.*;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.io.*;
 import java.nio.file.*;
@@ -182,6 +183,60 @@ public class CodingServiceImpl implements CodingService {
     }
 
     @Override
+    @Transactional
+    public Map<String, Object> updateCodingQuestion(Long questionId, CreateCodingQuestionRequest request) {
+        CodingQuestion question = codingQuestionRepository.findById(questionId)
+                .orElseThrow(() -> new RuntimeException("Coding question not found"));
+
+        question.setTitle(request.getTitle());
+        question.setDescription(request.getDescription());
+
+        if (request.getDifficulty() != null) {
+            question.setDifficulty(CodingQuestion.Difficulty.valueOf(request.getDifficulty().toUpperCase()));
+        }
+
+        if (request.getCompanyIds() != null) {
+            Set<Company> companies = request.getCompanyIds().isEmpty()
+                    ? new HashSet<>()
+                    : new HashSet<>(companyRepository.findAllById(request.getCompanyIds()));
+            question.setCompanies(companies);
+        }
+
+        question.setStarterCodeJava(request.getStarterCodeJava());
+        question.setStarterCodePython(request.getStarterCodePython());
+        question.setStarterCodeCpp(request.getStarterCodeCpp());
+        question.setStarterCodeJavascript(request.getStarterCodeJavascript());
+
+        // Replace test cases: delete old, save new
+        testCaseRepository.deleteByCodingQuestion_Id(questionId);
+
+        if (request.getTestCases() != null) {
+            List<TestCase> testCases = new ArrayList<>();
+            for (int i = 0; i < request.getTestCases().size(); i++) {
+                CreateCodingQuestionRequest.CreateTestCase tcReq = request.getTestCases().get(i);
+                TestCase tc = new TestCase();
+                tc.setCodingQuestion(question);
+                tc.setInputData(tcReq.getInputData());
+                tc.setExpectedOutput(tcReq.getExpectedOutput());
+                tc.setIsHidden(tcReq.getIsHidden() != null ? tcReq.getIsHidden() : false);
+                tc.setOrderIndex(tcReq.getOrderIndex() != null ? tcReq.getOrderIndex() : i);
+                tc.setExplanation(tcReq.getExplanation());
+                testCases.add(tc);
+            }
+            testCaseRepository.saveAll(testCases);
+        }
+
+        codingQuestionRepository.save(question);
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("id", question.getId());
+        response.put("title", question.getTitle());
+        response.put("message", "Coding question updated successfully");
+        return response;
+    }
+
+    @Override
+    @Transactional
     public void deleteCodingQuestion(Long questionId) {
         CodingQuestion q = codingQuestionRepository.findById(questionId)
                 .orElseThrow(() -> new RuntimeException("Coding question not found"));
@@ -234,7 +289,7 @@ public class CodingServiceImpl implements CodingService {
 
             } catch (Exception e) {
                 result.setPassed(false);
-                result.setActualOutput("");
+                result.setActualOutput("Error: " + e.getMessage());
                 result.setIsHidden(tc.getIsHidden());
             }
             results.add(result);
@@ -267,7 +322,13 @@ public class CodingServiceImpl implements CodingService {
     }
 
     private String runSingleTestCase(String language, String code, String input, String expectedOutput) throws Exception {
-        Path tempWorkDir = Files.createTempDirectory(Path.of(tempDir), "codeexec_");
+        // Normalize line endings: CRLF -> LF, bare CR -> LF
+        if (input != null) {
+            input = input.replace("\r\n", "\n").replace('\r', '\n');
+        }
+        Path tempRoot = Path.of(tempDir);
+        Files.createDirectories(tempRoot);
+        Path tempWorkDir = Files.createTempDirectory(tempRoot, "codeexec_");
         try {
             String output;
             switch (language.toLowerCase()) {
