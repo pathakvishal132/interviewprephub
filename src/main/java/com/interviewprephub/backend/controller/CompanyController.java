@@ -10,6 +10,7 @@ import com.interviewprephub.backend.entity.CompanyQuestion.Level;
 import com.interviewprephub.backend.repository.CompanyReviewRepository;
 import com.interviewprephub.backend.entity.CompanyReview;
 
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -103,6 +104,11 @@ public class CompanyController {
             return ResponseEntity.badRequest()
                     .body(Map.of("detail", e.getMessage()));
         }
+    }
+
+    @GetMapping("/list-all")
+    public ResponseEntity<List<Map<String, Object>>> listAllCompanies() {
+        return ResponseEntity.ok(companyService.getAllCompaniesSimple());
     }
 
     @GetMapping("/ping")

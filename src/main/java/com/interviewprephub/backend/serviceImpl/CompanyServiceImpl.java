@@ -227,4 +227,16 @@ public class CompanyServiceImpl implements CompanyService {
 		// TODO Auto-generated method stub
 		return null;
 	}
+
+	@Override
+	public List<Map<String, Object>> getAllCompaniesSimple() {
+		return companyRepository.findAll().stream()
+				.map(c -> {
+					Map<String, Object> m = new HashMap<>();
+					m.put("id", c.getId());
+					m.put("name", c.getName());
+					return m;
+				})
+				.collect(Collectors.toList());
+	}
 }

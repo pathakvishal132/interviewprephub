@@ -1,5 +1,6 @@
 package com.interviewprephub.backend.service;
 import com.interviewprephub.backend.entity.Company;
+import java.util.List;
 import java.util.Map;
 
 public interface CompanyService {
@@ -18,4 +19,6 @@ public interface CompanyService {
 
 	Map<String, Object> getFilteredQuestion(String level, String role, Integer minExperience, Integer maxExperience,
 			String description, String searchText , int page);
+
+	List<Map<String, Object>> getAllCompaniesSimple();
 }
