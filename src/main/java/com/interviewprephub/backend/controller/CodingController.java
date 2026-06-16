@@ -60,6 +60,20 @@ public class CodingController {
         return ResponseEntity.ok(result);
     }
 
+    @PutMapping("/question/{questionId}")
+    public ResponseEntity<?> updateCodingQuestion(
+            @PathVariable Long questionId,
+            @RequestBody CreateCodingQuestionRequest request,
+            HttpServletRequest httpRequest) {
+        String email = extractUserEmail(httpRequest);
+        if (!"pathakvishal132@gmail.com".equals(email)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("detail", "Only the admin can update coding questions"));
+        }
+        Map<String, Object> result = codingService.updateCodingQuestion(questionId, request);
+        return ResponseEntity.ok(result);
+    }
+
     @DeleteMapping("/question/{questionId}")
     public ResponseEntity<?> deleteCodingQuestion(
             @PathVariable Long questionId,

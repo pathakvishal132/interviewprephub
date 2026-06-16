@@ -268,6 +268,37 @@ public class CodingServiceImpl implements CodingService {
                     .collect(Collectors.toList());
         }
 
+        Path tempRoot = Path.of(tempDir);
+        Path tempWorkDir = null;
+        String language = request.getLanguage().toLowerCase();
+
+        try {
+            Files.createDirectories(tempRoot);
+            tempWorkDir = Files.createTempDirectory(tempRoot, "codeexec_");
+        } catch (IOException e) {
+            SubmitCodeResponse errorResp = new SubmitCodeResponse();
+            errorResp.setStatus("ERROR");
+            errorResp.setErrorMessage("Failed to create execution sandbox: " + e.getMessage());
+            return errorResp;
+        }
+
+        try {
+            // Write/compile code once per execution request
+            if (language.equals("java")) {
+                compileJava(request.getCode(), tempWorkDir);
+            } else if (language.equals("cpp") || language.equals("c++")) {
+                compileCpp(request.getCode(), tempWorkDir);
+            } else {
+                prepareInterpreterFile(language, request.getCode(), tempWorkDir);
+            }
+        } catch (Exception e) {
+            deleteDirectory(tempWorkDir);
+            SubmitCodeResponse errorResp = new SubmitCodeResponse();
+            errorResp.setStatus("ERROR");
+            errorResp.setErrorMessage(e.getMessage());
+            return errorResp;
+        }
+
         long startTime = System.currentTimeMillis();
         List<TestCaseResult> results = new ArrayList<>();
         int passed = 0;
@@ -279,10 +310,25 @@ public class CodingServiceImpl implements CodingService {
             result.setIsHidden(tc.getIsHidden());
 
             try {
-                String actualOutput = runSingleTestCase(request.getLanguage(), request.getCode(),
-                        tc.getInputData(), tc.getExpectedOutput());
-                result.setActualOutput(actualOutput);
+                String tcInput = tc.getInputData();
+                if (tcInput != null) {
+                    tcInput = tcInput.replace("\r\n", "\n").replace('\r', '\n');
+                }
 
+                String actualOutput;
+                if (language.equals("java")) {
+                    actualOutput = runProcessWithInput(tempWorkDir, tcInput, "java", "Main");
+                } else if (language.equals("cpp") || language.equals("c++")) {
+                    actualOutput = runProcessWithInput(tempWorkDir, tcInput, "./solution");
+                } else if (language.equals("python") || language.equals("python3")) {
+                    actualOutput = runProcessWithInput(tempWorkDir, tcInput, "python3", "solution.py");
+                } else if (language.equals("javascript") || language.equals("js") || language.equals("node")) {
+                    actualOutput = runProcessWithInput(tempWorkDir, tcInput, "node", "solution.js");
+                } else {
+                    throw new IllegalArgumentException("Unsupported language: " + language);
+                }
+
+                result.setActualOutput(actualOutput);
                 boolean isPassed = compareOutput(actualOutput, tc.getExpectedOutput());
                 result.setPassed(isPassed);
                 if (isPassed) passed++;
@@ -296,6 +342,7 @@ public class CodingServiceImpl implements CodingService {
         }
 
         long executionTime = System.currentTimeMillis() - startTime;
+        deleteDirectory(tempWorkDir);
 
         boolean allPassed = passed == testCasesToRun.size();
         Status submissionStatus = allPassed ? Status.PASS : Status.FAIL;
@@ -321,43 +368,7 @@ public class CodingServiceImpl implements CodingService {
         return response;
     }
 
-    private String runSingleTestCase(String language, String code, String input, String expectedOutput) throws Exception {
-        // Normalize line endings: CRLF -> LF, bare CR -> LF
-        if (input != null) {
-            input = input.replace("\r\n", "\n").replace('\r', '\n');
-        }
-        Path tempRoot = Path.of(tempDir);
-        Files.createDirectories(tempRoot);
-        Path tempWorkDir = Files.createTempDirectory(tempRoot, "codeexec_");
-        try {
-            String output;
-            switch (language.toLowerCase()) {
-                case "java":
-                    output = executeJava(code, input, tempWorkDir);
-                    break;
-                case "python":
-                case "python3":
-                    output = executePython(code, input, tempWorkDir);
-                    break;
-                case "javascript":
-                case "js":
-                case "node":
-                    output = executeJavaScript(code, input, tempWorkDir);
-                    break;
-                case "cpp":
-                case "c++":
-                    output = executeCpp(code, input, tempWorkDir);
-                    break;
-                default:
-                    throw new IllegalArgumentException("Unsupported language: " + language);
-            }
-            return output != null ? output.trim() : "";
-        } finally {
-            deleteDirectory(tempWorkDir);
-        }
-    }
-
-    private String executeJava(String code, String input, Path workDir) throws Exception {
+    private void compileJava(String code, Path workDir) throws Exception {
         Files.writeString(workDir.resolve("Solution.java"), code);
 
         StringBuilder runnerCode = new StringBuilder();
@@ -367,9 +378,7 @@ public class CodingServiceImpl implements CodingService {
         runnerCode.append("        Scanner sc = new Scanner(System.in);\n");
         runnerCode.append("        StringBuilder sb = new StringBuilder();\n");
         runnerCode.append("        while (sc.hasNextLine()) {\n");
-        runnerCode.append("            String line = sc.nextLine();\n");
-        runnerCode.append("            if (line.isEmpty()) break;\n");
-        runnerCode.append("            sb.append(line).append(\"\\n\");\n");
+        runnerCode.append("            sb.append(sc.nextLine()).append(\"\\n\");\n");
         runnerCode.append("        }\n");
         runnerCode.append("        sc.close();\n");
         runnerCode.append("        String input = sb.toString().trim();\n");
@@ -392,40 +401,9 @@ public class CodingServiceImpl implements CodingService {
             String error = new String(compileProcess.getInputStream().readAllBytes());
             throw new RuntimeException("Compilation error:\n" + error);
         }
-
-        return runProcessWithInput(workDir, input, "java", "Main");
     }
 
-    private String executePython(String code, String input, Path workDir) throws Exception {
-        StringBuilder fullCode = new StringBuilder(code);
-        fullCode.append("\n\nimport sys\n");
-        fullCode.append("if __name__ == '__main__':\n");
-        fullCode.append("    input_str = sys.stdin.read().strip()\n");
-        fullCode.append("    solver = Solution()\n");
-        fullCode.append("    result = solver.solve(input_str)\n");
-        fullCode.append("    print(result, end='')\n");
-
-        Files.writeString(workDir.resolve("solution.py"), fullCode.toString());
-        return runProcessWithInput(workDir, input, "python3", "solution.py");
-    }
-
-    private String executeJavaScript(String code, String input, Path workDir) throws Exception {
-        StringBuilder fullCode = new StringBuilder(code);
-        fullCode.append("\n\nconst readline = require('readline');\n");
-        fullCode.append("const rl = readline.createInterface({ input: process.stdin });\n");
-        fullCode.append("let inputLines = [];\n");
-        fullCode.append("rl.on('line', (line) => { inputLines.push(line); });\n");
-        fullCode.append("rl.on('close', () => {\n");
-        fullCode.append("    const solver = new Solution();\n");
-        fullCode.append("    const result = solver.solve(inputLines.join('\\n'));\n");
-        fullCode.append("    process.stdout.write(result);\n");
-        fullCode.append("});\n");
-
-        Files.writeString(workDir.resolve("solution.js"), fullCode.toString());
-        return runProcessWithInput(workDir, input, "node", "solution.js");
-    }
-
-    private String executeCpp(String code, String input, Path workDir) throws Exception {
+    private void compileCpp(String code, Path workDir) throws Exception {
         Files.writeString(workDir.resolve("solution.cpp"), code);
 
         ProcessBuilder pb = new ProcessBuilder("g++", "-std=c++17", "-o", "solution", "solution.cpp");
@@ -441,8 +419,33 @@ public class CodingServiceImpl implements CodingService {
             String error = new String(compileProcess.getInputStream().readAllBytes());
             throw new RuntimeException("Compilation error:\n" + error);
         }
+    }
 
-        return runProcessWithInput(workDir, input, "./solution");
+    private void prepareInterpreterFile(String language, String code, Path workDir) throws Exception {
+        if (language.equals("python") || language.equals("python3")) {
+            StringBuilder fullCode = new StringBuilder(code);
+            fullCode.append("\n\nimport sys\n");
+            fullCode.append("if __name__ == '__main__':\n");
+            fullCode.append("    input_str = sys.stdin.read().strip()\n");
+            fullCode.append("    solver = Solution()\n");
+            fullCode.append("    result = solver.solve(input_str)\n");
+            fullCode.append("    print(result, end='')\n");
+            Files.writeString(workDir.resolve("solution.py"), fullCode.toString());
+        } else if (language.equals("javascript") || language.equals("js") || language.equals("node")) {
+            StringBuilder fullCode = new StringBuilder(code);
+            fullCode.append("\n\nconst readline = require('readline');\n");
+            fullCode.append("const rl = readline.createInterface({ input: process.stdin });\n");
+            fullCode.append("let inputLines = [];\n");
+            fullCode.append("rl.on('line', (line) => { inputLines.push(line); });\n");
+            fullCode.append("rl.on('close', () => {\n");
+            fullCode.append("    const solver = new Solution();\n");
+            fullCode.append("    const result = solver.solve(inputLines.join('\\n'));\n");
+            fullCode.append("    process.stdout.write(result);\n");
+            fullCode.append("});\n");
+            Files.writeString(workDir.resolve("solution.js"), fullCode.toString());
+        } else {
+            throw new IllegalArgumentException("Unsupported language: " + language);
+        }
     }
 
     private String runProcessWithInput(Path workDir, String input, String... command) throws Exception {
@@ -452,11 +455,12 @@ public class CodingServiceImpl implements CodingService {
 
         Process process = pb.start();
 
-        if (input != null && !input.isEmpty()) {
-            try (var os = process.getOutputStream()) {
+        // Always close output stream to send EOF to the subprocess, writing input if available
+        try (var os = process.getOutputStream()) {
+            if (input != null && !input.isEmpty()) {
                 os.write(input.getBytes());
-                os.flush();
             }
+            os.flush();
         }
 
         boolean finished = process.waitFor(EXECUTION_TIMEOUT_SECONDS, TimeUnit.SECONDS);
